@@ -679,11 +679,11 @@ export default function App() {
         />
 
         {entryType === "expense" ? (
-          <select
-            className="input"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
+         <select
+  className="input"
+  value={category}
+  onChange={(e) => setCategory(e.target.value)}
+>
             {expenseCategories.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -940,10 +940,10 @@ export default function App() {
 
         <div className="top-row">
           <select
-            className="input month-select"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          >
+  className="input"
+  value={selectedMonth}
+  onChange={(e) => setSelectedMonth(e.target.value)}
+>
             {months.map((item) => (
               <option key={item} value={item}>
                 {item}
@@ -1037,12 +1037,14 @@ export default function App() {
           </button>
         </div>
 
-        {activeTab === "home" && renderHome()}
-        {activeTab === "add" && renderAdd()}
-        {activeTab === "plan" && renderPlan()}
-        {activeTab === "charts" && renderCharts()}
-        {activeTab === "ai" && renderAI()}
-        {activeTab === "cloud" && renderCloud()}
+<div key={activeTab} className="page-animate">
+  {activeTab === "home" && renderHome()}
+  {activeTab === "add" && renderAdd()}
+  {activeTab === "plan" && renderPlan()}
+  {activeTab === "charts" && renderCharts()}
+  {activeTab === "ai" && renderAI()}
+  {activeTab === "cloud" && renderCloud()}
+</div>
       </div>
     </div>
   );
