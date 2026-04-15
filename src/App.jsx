@@ -89,7 +89,7 @@ function todayDate() {
 }
 
 function monthKey(date) {
-  return date.slice(0, 7);
+  return String(date).slice(0, 7);
 }
 
 function uid() {
@@ -103,10 +103,10 @@ function CustomSelect({
   placeholder = "Select",
   className = "",
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
   const ref = React.useRef(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     function handleClickOutside(event) {
       if (ref.current && !ref.current.contains(event.target)) {
         setOpen(false);
@@ -179,6 +179,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState("home");
+
   const [entryType, setEntryType] = useState("expense");
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -227,6 +228,18 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState("local");
   const [syncMessage, setSyncMessage] = useState("Local only");
 
+  const [autoSync, setAutoSync] = useState(() => {
+    const saved = localStorage.getItem("autoSync");
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  const [notificationPermission, setNotificationPermission] = useState(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return "unsupported";
+    }
+    return Notification.permission;
+  });
+
   useEffect(() => {
     localStorage.setItem("transactions", JSON.stringify(transactions));
   }, [transactions]);
@@ -251,7 +264,8 @@ export default function App() {
     localStorage.setItem("supabaseUrl", supabaseUrl);
     localStorage.setItem("supabaseAnonKey", supabaseAnonKey);
     localStorage.setItem("financeUserId", userId);
-  }, [supabaseUrl, supabaseAnonKey, userId]);
+    localStorage.setItem("autoSync", JSON.stringify(autoSync));
+  }, [supabaseUrl, supabaseAnonKey, userId, autoSync]);
 
   const allExpenseCategories = useMemo(
     () => [...baseExpenseCategories, ...customCategories],
@@ -272,15 +286,10 @@ export default function App() {
     }
   }, [supabaseUrl, supabaseAnonKey]);
 
-  const monthTransactions = useMemo(() => {
-    return transactions
-      .filter((item) => monthKey(item.date) === selectedMonth)
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [transactions, selectedMonth]);
-
   const sortedMonths = useMemo(() => {
-    return Array.from(new Set(transactions.map((item) => monthKey(item.date))))
-      .sort();
+    return Array.from(
+      new Set(transactions.map((item) => monthKey(item.date)))
+    ).sort();
   }, [transactions]);
 
   const monthlySnapshots = useMemo(() => {
@@ -288,7 +297,10 @@ export default function App() {
     const snapshotMap = {};
 
     sortedMonths.forEach((month) => {
-      const monthItems = transactions.filter((item) => monthKey(item.date) === month);
+      const monthItems = transactions.filter(
+        (item) => monthKey(item.date) === month
+      );
+
       const income = monthItems
         .filter((item) => item.type === "income")
         .reduce((sum, item) => sum + Number(item.amount), 0);
@@ -323,6 +335,12 @@ export default function App() {
     closingSavings: 0,
   };
 
+  const monthTransactions = useMemo(() => {
+    return transactions
+      .filter((item) => monthKey(item.date) === selectedMonth)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [transactions, selectedMonth]);
+
   const incomeTotal = currentSnapshot.income;
   const expenseTotal = currentSnapshot.expense;
   const carriedSavings = currentSnapshot.openingSavings;
@@ -334,7 +352,8 @@ export default function App() {
       .filter(
         (item) =>
           item.type === "expense" &&
-          (item.category === "Money Given" || item.category === "Send Home Money")
+          (item.category === "Money Given" ||
+            item.category === "Send Home Money")
       )
       .reduce((sum, item) => sum + Number(item.amount), 0);
   }, [monthTransactions]);
@@ -416,29 +435,51 @@ export default function App() {
           person,
           lent: 0,
           returned: 0,
-          pending: 0,
+          borrowed: 0,
+          repaid: 0,
+          pendingToReceive: 0,
+          pendingToPay: 0,
         };
       }
 
-      if (item.type === "lent") {
-        map[person].lent += Number(item.amount);
-      }
-
-      if (item.type === "returned") {
+      if (item.type === "lent") map[person].lent += Number(item.amount);
+      if (item.type === "returned")
         map[person].returned += Number(item.amount);
-      }
+      if (item.type === "borrowed")
+        map[person].borrowed += Number(item.amount);
+      if (item.type === "repaid") map[person].repaid += Number(item.amount);
 
-      map[person].pending = map[person].lent - map[person].returned;
+      map[person].pendingToReceive = map[person].lent - map[person].returned;
+      map[person].pendingToPay = map[person].borrowed - map[person].repaid;
     });
 
     return Object.values(map)
-      .filter((item) => item.lent > 0 || item.returned > 0)
-      .sort((a, b) => b.pending - a.pending);
+      .filter(
+        (item) =>
+          item.lent > 0 ||
+          item.returned > 0 ||
+          item.borrowed > 0 ||
+          item.repaid > 0
+      )
+      .sort(
+        (a, b) =>
+          b.pendingToReceive +
+          b.pendingToPay -
+          (a.pendingToReceive + a.pendingToPay)
+      );
   }, [owes]);
 
   const totalPendingToReceive = useMemo(() => {
-    return owesSummary.reduce((sum, item) => sum + item.pending, 0);
+    return owesSummary.reduce((sum, item) => sum + item.pendingToReceive, 0);
   }, [owesSummary]);
+
+  const totalPendingToPay = useMemo(() => {
+    return owesSummary.reduce((sum, item) => sum + item.pendingToPay, 0);
+  }, [owesSummary]);
+
+  const realNetWorth = useMemo(() => {
+    return savingsAmount + totalPendingToReceive - totalPendingToPay;
+  }, [savingsAmount, totalPendingToReceive, totalPendingToPay]);
 
   const aiInsights = useMemo(() => {
     const tips = [];
@@ -470,9 +511,15 @@ export default function App() {
 
     if (totalPendingToReceive > 0) {
       tips.push(
-        `People still need to give you back ${formatQAR(
-          totalPendingToReceive
-        )}. Check the Owed section regularly.`
+        `People still need to give you back ${formatQAR(totalPendingToReceive)}.`
+      );
+    }
+
+    if (totalPendingToPay > 0) {
+      tips.push(
+        `You still need to pay back ${formatQAR(
+          totalPendingToPay
+        )}. Keep that amount reserved.`
       );
     }
 
@@ -508,6 +555,7 @@ export default function App() {
     savingsRate,
     moneyGivenTotal,
     totalPendingToReceive,
+    totalPendingToPay,
     nonEssentialTotal,
     essentialTotal,
     budgetStatus,
@@ -517,10 +565,103 @@ export default function App() {
   const months = useMemo(() => {
     return Array.from(
       new Set(
-        transactions.map((item) => monthKey(item.date)).concat(todayDate().slice(0, 7))
+        transactions
+          .map((item) => monthKey(item.date))
+          .concat(todayDate().slice(0, 7))
       )
     ).sort();
   }, [transactions]);
+
+  const smartAlerts = useMemo(() => {
+    const alerts = [];
+
+    if (netThisMonth < 0) {
+      alerts.push({
+        type: "danger",
+        title: "Negative month",
+        text: `You are down ${formatQAR(Math.abs(netThisMonth))} this month.`,
+      });
+    }
+
+    if (totalPendingToPay > 0) {
+      alerts.push({
+        type: "warning",
+        title: "Repayments pending",
+        text: `${formatQAR(totalPendingToPay)} still needs to be paid back.`,
+      });
+    }
+
+    if (totalPendingToReceive > 0) {
+      alerts.push({
+        type: "info",
+        title: "Money to receive",
+        text: `${formatQAR(
+          totalPendingToReceive
+        )} is still pending from other people.`,
+      });
+    }
+
+    budgetStatus
+      .filter((item) => item.remaining < 0)
+      .slice(0, 2)
+      .forEach((item) => {
+        alerts.push({
+          type: "danger",
+          title: `${item.name} over budget`,
+          text: `Exceeded by ${formatQAR(Math.abs(item.remaining))}.`,
+        });
+      });
+
+    if (savingsRate > 0 && savingsRate < 20) {
+      alerts.push({
+        type: "warning",
+        title: "Low savings rate",
+        text: `Current savings rate is ${Math.round(savingsRate)}%.`,
+      });
+    }
+
+    return alerts;
+  }, [
+    netThisMonth,
+    totalPendingToPay,
+    totalPendingToReceive,
+    budgetStatus,
+    savingsRate,
+  ]);
+
+  useEffect(() => {
+    if (!autoSync || !supabase || syncStatus === "syncing") return;
+
+    const timeout = setTimeout(() => {
+      pushToCloud(true);
+    }, 1200);
+
+    return () => clearTimeout(timeout);
+  }, [transactions, budgets, owes, selectedMonth, autoSync, supabase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    setNotificationPermission(Notification.permission);
+  }, []);
+
+  useEffect(() => {
+    if (notificationPermission !== "granted" || smartAlerts.length === 0) return;
+
+    const firstAlert = smartAlerts[0];
+    const alertKey = `${firstAlert.title}-${firstAlert.text}-${selectedMonth}`;
+    const lastAlert = localStorage.getItem("lastSmartAlert");
+
+    if (lastAlert === alertKey) return;
+
+    new Notification(firstAlert.title, { body: firstAlert.text });
+    localStorage.setItem("lastSmartAlert", alertKey);
+  }, [smartAlerts, notificationPermission, selectedMonth]);
+
+  async function requestNotificationPermission() {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    const result = await Notification.requestPermission();
+    setNotificationPermission(result);
+  }
 
   function sanitizeDecimal(value) {
     return value.replace(/[^0-9.]/g, "");
@@ -631,11 +772,12 @@ export default function App() {
       setSyncMessage("Add Supabase URL and anon key first");
       return;
     }
+
     setSyncStatus("connected");
     setSyncMessage("Connected. Ready to sync.");
   }
 
-  async function pushToCloud() {
+  async function pushToCloud(silent = false) {
     if (!supabase) {
       setSyncStatus("error");
       setSyncMessage("Supabase not connected");
@@ -643,10 +785,13 @@ export default function App() {
     }
 
     setSyncStatus("syncing");
-    setSyncMessage("Uploading data...");
+    if (!silent) setSyncMessage("Uploading data...");
 
     try {
-      await supabase.from("finance_transactions").delete().eq("user_id", userId);
+      await supabase
+        .from("finance_transactions")
+        .delete()
+        .eq("user_id", userId);
 
       if (transactions.length > 0) {
         const rows = transactions.map((item) => ({
@@ -675,11 +820,13 @@ export default function App() {
         budget,
       }));
 
-      const { error: budgetError } = await supabase
-        .from("finance_budgets")
-        .insert(budgetRows);
+      if (budgetRows.length > 0) {
+        const { error: budgetError } = await supabase
+          .from("finance_budgets")
+          .insert(budgetRows);
 
-      if (budgetError) throw budgetError;
+        if (budgetError) throw budgetError;
+      }
 
       await supabase.from("finance_owes").delete().eq("user_id", userId);
 
@@ -711,7 +858,7 @@ export default function App() {
       if (settingsError) throw settingsError;
 
       setSyncStatus("connected");
-      setSyncMessage("Cloud sync completed");
+      setSyncMessage(silent ? "Auto sync completed" : "Cloud sync completed");
     } catch (error) {
       setSyncStatus("error");
       setSyncMessage(error?.message || "Cloud sync failed");
@@ -828,22 +975,24 @@ export default function App() {
         </div>
 
         <div className="card">
-          <div className="section-title">People Need to Pay You</div>
+          <div className="section-title">Money Tracking</div>
           {owesSummary.length === 0 ? (
-            <div className="empty-text">No pending money to receive.</div>
+            <div className="empty-text">No pending money records.</div>
           ) : (
             owesSummary.map((item) => (
               <div className="transaction-item" key={item.person}>
                 <div className="transaction-left">
                   <div className="transaction-title">{item.person}</div>
                   <div className="transaction-meta">
-                    <span>Lent: {formatQAR(item.lent)}</span>
-                    <span>Returned: {formatQAR(item.returned)}</span>
+                    <span>
+                      They owe me: {formatQAR(item.pendingToReceive)}
+                    </span>
+                    <span>I owe them: {formatQAR(item.pendingToPay)}</span>
                   </div>
                 </div>
                 <div className="transaction-right">
-                  <div className={item.pending > 0 ? "amount expense" : "amount income"}>
-                    {formatQAR(item.pending)}
+                  <div className="amount income">
+                    {formatQAR(item.pendingToReceive - item.pendingToPay)}
                   </div>
                 </div>
               </div>
@@ -959,7 +1108,7 @@ export default function App() {
         </div>
 
         <div className="card">
-          <div className="section-title center">Track Money Owed to You</div>
+          <div className="section-title center">Track Loans and Borrowing</div>
 
           <input
             className="input"
@@ -982,6 +1131,8 @@ export default function App() {
             options={[
               { value: "lent", label: "I gave money" },
               { value: "returned", label: "They paid me back" },
+              { value: "borrowed", label: "I borrowed money" },
+              { value: "repaid", label: "I paid them back" },
             ]}
           />
 
@@ -1026,7 +1177,7 @@ export default function App() {
           />
 
           <button className="btn btn-dark full" onClick={addOweEntry}>
-            Save Owed Entry
+            Save Money Record
           </button>
 
           <div className="transaction-list" style={{ marginTop: "12px" }}>
@@ -1036,14 +1187,26 @@ export default function App() {
                   <div className="transaction-title">{item.person}</div>
                   <div className="transaction-meta">
                     <span className="pill">
-                      {item.type === "lent" ? "Given" : "Returned"}
+                      {item.type === "lent"
+                        ? "Given"
+                        : item.type === "returned"
+                        ? "Returned"
+                        : item.type === "borrowed"
+                        ? "Borrowed"
+                        : "Repaid"}
                     </span>
                     <span>{item.date}</span>
                     {item.note ? <span>• {item.note}</span> : null}
                   </div>
                 </div>
                 <div className="transaction-right">
-                  <div className={item.type === "lent" ? "amount expense" : "amount income"}>
+                  <div
+                    className={
+                      item.type === "lent" || item.type === "repaid"
+                        ? "amount expense"
+                        : "amount income"
+                    }
+                  >
                     {formatQAR(item.amount)}
                   </div>
                   <button
@@ -1171,10 +1334,18 @@ export default function App() {
 
         <div className="card">
           <div className="section-title">Control First</div>
-          <div className="tip">1. Savings now carry forward automatically to the next month.</div>
-          <div className="tip">2. Track money you gave separately from money people returned.</div>
-          <div className="tip">3. Pending money to receive is shown clearly on the home screen.</div>
-          <div className="tip">4. Check Plan tab before spending on shopping or lifestyle.</div>
+          <div className="tip">
+            1. Savings carry forward automatically every month.
+          </div>
+          <div className="tip">
+            2. Track both sides: people who owe you and money you borrowed.
+          </div>
+          <div className="tip">
+            3. Real Net = savings + money to receive - money to pay.
+          </div>
+          <div className="tip">
+            4. Check Plan tab before spending on shopping or lifestyle.
+          </div>
         </div>
       </div>
     );
@@ -1217,11 +1388,32 @@ export default function App() {
             <button className="btn btn-light" onClick={connectCloud}>
               Connect
             </button>
-            <button className="btn btn-dark" onClick={pushToCloud}>
+            <button className="btn btn-dark" onClick={() => pushToCloud()}>
               Push
             </button>
             <button className="btn btn-light" onClick={pullFromCloud}>
               Pull
+            </button>
+          </div>
+
+          <div className="grid-2">
+            <button
+              className={autoSync ? "btn btn-dark" : "btn btn-light"}
+              onClick={() => setAutoSync((prev) => !prev)}
+            >
+              {autoSync ? "Auto Sync On" : "Auto Sync Off"}
+            </button>
+            <button
+              className={
+                notificationPermission === "granted"
+                  ? "btn btn-dark"
+                  : "btn btn-light"
+              }
+              onClick={requestNotificationPermission}
+            >
+              {notificationPermission === "granted"
+                ? "Notifications On"
+                : "Enable Alerts"}
             </button>
           </div>
 
@@ -1238,7 +1430,8 @@ export default function App() {
             finance_budgets(user_id text, category text, budget numeric)
           </div>
           <div className="code-box">
-            finance_owes(id text primary key, user_id text, person text, amount numeric, type text, date date, note text)
+            finance_owes(id text primary key, user_id text, person text, amount
+            numeric, type text, date date, note text)
           </div>
           <div className="code-box">
             finance_settings(user_id text primary key, selected_month text)
@@ -1284,12 +1477,12 @@ export default function App() {
               </div>
             </div>
             <div className="rate-box">
-              <div className="hero-sub small-white">THIS MONTH</div>
-              <div className="rate-value">{formatQAR(netThisMonth)}</div>
+              <div className="hero-sub small-white">REAL NET</div>
+              <div className="rate-value">{formatQAR(realNetWorth)}</div>
             </div>
           </div>
 
-          <div className="stat-grid">
+          <div className="stat-grid stat-grid-pro">
             <div className="stat-box">
               <div className="stat-label">Carry In</div>
               <div className="stat-value">{Math.round(carriedSavings)}</div>
@@ -1299,11 +1492,29 @@ export default function App() {
               <div className="stat-value">{Math.round(incomeTotal)}</div>
             </div>
             <div className="stat-box">
-              <div className="stat-label">Pending</div>
-              <div className="stat-value">{Math.round(totalPendingToReceive)}</div>
+              <div className="stat-label">To Receive</div>
+              <div className="stat-value">
+                {Math.round(totalPendingToReceive)}
+              </div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-label">To Pay</div>
+              <div className="stat-value">{Math.round(totalPendingToPay)}</div>
             </div>
           </div>
         </div>
+
+        {smartAlerts.length > 0 && (
+          <div className="card">
+            <div className="section-title">Smart Alerts</div>
+            {smartAlerts.slice(0, 3).map((alert, index) => (
+              <div key={index} className={`tip alert-${alert.type}`}>
+                <strong>{alert.title}</strong>
+                <div>{alert.text}</div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="grid-2 summary-grid">
           <div className="summary-card">
@@ -1318,44 +1529,72 @@ export default function App() {
           </div>
         </div>
 
-        <div className="tab-bar">
-          <button
-            className={activeTab === "home" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("home")}
-          >
-            Home
-          </button>
-          <button
-            className={activeTab === "add" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("add")}
-          >
-            Add
-          </button>
-          <button
-            className={activeTab === "plan" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("plan")}
-          >
-            Plan
-          </button>
-          <button
-            className={activeTab === "charts" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("charts")}
-          >
-            Charts
-          </button>
-          <button
-            className={activeTab === "ai" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("ai")}
-          >
-            AI
-          </button>
-          <button
-            className={activeTab === "cloud" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("cloud")}
-          >
-            Cloud
-          </button>
+        <div className="grid-2 summary-grid">
+          <div className="summary-card">
+            <div className="summary-label">People Owe Me</div>
+            <div className="summary-value">
+              {formatQAR(totalPendingToReceive)}
+            </div>
+            <div className="summary-note">Pending to receive</div>
+          </div>
+          <div className="summary-card">
+            <div className="summary-label">I Need To Pay</div>
+            <div className="summary-value">{formatQAR(totalPendingToPay)}</div>
+            <div className="summary-note">Pending to repay</div>
+          </div>
         </div>
+
+        <div className="bottom-nav-wrap">
+  <div className="tab-bar floating-tab-bar">
+    <button
+      className={activeTab === "home" ? "tab active" : "tab"}
+      onClick={() => setActiveTab("home")}
+    >
+      <span className="tab-icon">⌂</span>
+      <span className="tab-text">Home</span>
+    </button>
+
+    <button
+      className={activeTab === "add" ? "tab active" : "tab"}
+      onClick={() => setActiveTab("add")}
+    >
+      <span className="tab-icon">＋</span>
+      <span className="tab-text">Add</span>
+    </button>
+
+    <button
+      className={activeTab === "plan" ? "tab active" : "tab"}
+      onClick={() => setActiveTab("plan")}
+    >
+      <span className="tab-icon">◉</span>
+      <span className="tab-text">Plan</span>
+    </button>
+
+    <button
+      className={activeTab === "charts" ? "tab active" : "tab"}
+      onClick={() => setActiveTab("charts")}
+    >
+      <span className="tab-icon">▤</span>
+      <span className="tab-text">Charts</span>
+    </button>
+
+    <button
+      className={activeTab === "ai" ? "tab active" : "tab"}
+      onClick={() => setActiveTab("ai")}
+    >
+      <span className="tab-icon">✦</span>
+      <span className="tab-text">AI</span>
+    </button>
+
+    <button
+      className={activeTab === "cloud" ? "tab active" : "tab"}
+      onClick={() => setActiveTab("cloud")}
+    >
+      <span className="tab-icon">☁</span>
+      <span className="tab-text">Cloud</span>
+    </button>
+  </div>
+</div>
 
         <div key={activeTab} className="page-animate">
           {activeTab === "home" && renderHome()}

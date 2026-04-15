@@ -51,7 +51,208 @@ select,
 textarea {
   font: inherit;
 }
+/* ===== SMOOTH GLOBAL ===== */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
 
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+}
+
+/* ===== BUTTON ANIMATION ===== */
+.btn {
+  transition: all 0.25s ease;
+  border-radius: 14px;
+}
+
+.btn:active {
+  transform: scale(0.96);
+}
+
+/* ===== CARD UPGRADE ===== */
+.card {
+  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  background: rgba(255,255,255,0.75);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+/* ===== HERO CARD ===== */
+.hero-card {
+  border-radius: 28px;
+  padding: 20px;
+  background: linear-gradient(135deg, #111, #2c2c2c);
+  color: white;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+/* ===== STAT GRID PRO ===== */
+.stat-grid-pro {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.stat-box {
+  background: rgba(255,255,255,0.08);
+  padding: 10px;
+  border-radius: 14px;
+  text-align: center;
+  transition: 0.2s;
+}
+
+.stat-box:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* ===== SUMMARY CARDS ===== */
+.summary-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.05);
+  transition: 0.2s;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+}
+
+/* ===== TRANSACTIONS ===== */
+.transaction-item {
+  transition: all 0.25s ease;
+  border-radius: 14px;
+}
+
+.transaction-item:hover {
+  background: rgba(0,0,0,0.03);
+}
+
+/* ===== INPUTS ===== */
+.input {
+  border-radius: 14px;
+  border: 1px solid #eee;
+  transition: 0.2s;
+}
+
+.input:focus {
+  border-color: #111;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+}
+
+/* ===== CUSTOM SELECT (APPLE STYLE) ===== */
+.custom-select-trigger {
+  border-radius: 14px;
+  transition: all 0.2s ease;
+}
+
+.custom-select-trigger:active {
+  transform: scale(0.97);
+}
+
+.custom-select-menu {
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* ===== TABS ===== */
+.tab {
+  transition: all 0.25s ease;
+  border-radius: 12px;
+}
+
+.tab.active {
+  background: #111;
+  color: white;
+  transform: scale(1.05);
+}
+
+/* ===== PAGE ANIMATION ===== */
+.page-animate {
+  animation: fadeSlide 0.3s ease;
+}
+
+@keyframes fadeSlide {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== SMART ALERTS ===== */
+.tip {
+  padding: 12px;
+  border-radius: 14px;
+  margin-bottom: 8px;
+  animation: fadeSlide 0.3s ease;
+}
+
+/* Alert types */
+.alert-danger {
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
+}
+
+.alert-warning {
+  background: rgba(255, 149, 0, 0.1);
+  color: #ff9500;
+}
+
+.alert-info {
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+}
+
+/* ===== SYNC STATUS ===== */
+.sync-pill {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sync-pill.connected {
+  background: rgba(52,199,89,0.15);
+  color: #34c759;
+}
+
+.sync-pill.syncing {
+  background: rgba(255,149,0,0.15);
+  color: #ff9500;
+}
+
+.sync-pill.error {
+  background: rgba(255,59,48,0.15);
+  color: #ff3b30;
+}
+
+/* ===== CHART ===== */
+.chart-bar {
+  height: 8px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #111, #555);
+  transition: width 0.4s ease;
+}
+
+/* ===== PRO TOUCH ===== */
+.icon-btn {
+  transition: 0.2s;
+}
+
+.icon-btn:active {
+  transform: scale(0.85);
+}
 .app-shell {
   min-height: 100vh;
   background: transparent;
@@ -935,5 +1136,152 @@ textarea {
 
   .grid-3 {
     grid-template-columns: 1fr;
+  }
+}
+
+
+/* Pro stat grid */
+.stat-grid-pro {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Smart alert colors */
+.alert-danger {
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
+  border: 1px solid rgba(255, 59, 48, 0.18);
+}
+
+.alert-warning {
+  background: rgba(255, 149, 0, 0.1);
+  color: #ff9500;
+  border: 1px solid rgba(255, 149, 0, 0.18);
+}
+
+.alert-info {
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  border: 1px solid rgba(0, 122, 255, 0.18);
+}
+
+/* Better spacing for grid sections */
+.grid-2 {
+  align-items: start;
+}
+
+/* Better transaction card alignment */
+.transaction-right {
+  min-width: 92px;
+  justify-content: flex-end;
+}
+
+/* Status box cleaner */
+.status-box {
+  line-height: 1.4;
+}
+
+/* Better mobile layout */
+@media (max-width: 640px) {
+  .stat-grid-pro {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .transaction-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .transaction-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+
+/* Floating iPhone-style bottom tab bar */
+.app-container {
+  padding-bottom: 110px;
+}
+
+.bottom-nav-wrap {
+  position: sticky;
+  bottom: 16px;
+  z-index: 50;
+  margin-top: 18px;
+}
+
+.floating-tab-bar {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 8px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 12px 32px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.floating-tab-bar .tab {
+  height: 56px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  font-weight: 700;
+}
+
+.tab-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.tab-text {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.floating-tab-bar .tab.active {
+  background: linear-gradient(180deg, #1b2235 0%, #111827 100%);
+  color: white;
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.18);
+}
+
+.floating-tab-bar .tab:not(.active):hover {
+  background: rgba(17, 24, 39, 0.05);
+}
+
+@media (max-width: 640px) {
+  .app-container {
+    padding-bottom: 120px;
+  }
+
+  .bottom-nav-wrap {
+    bottom: 10px;
+  }
+
+  .floating-tab-bar {
+    gap: 4px;
+    padding: 7px;
+    border-radius: 24px;
+  }
+
+  .floating-tab-bar .tab {
+    height: 52px;
+    border-radius: 16px;
+  }
+
+  .tab-icon {
+    font-size: 14px;
+  }
+
+  .tab-text {
+    font-size: 10px;
   }
 }
