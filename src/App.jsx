@@ -61,105 +61,6 @@ const initialTransactions = [
     date: "2026-02-03",
     note: "Phone bill",
   },
-  {
-    id: "seed-4",
-    type: "expense",
-    title: "Grocery",
-    amount: 104,
-    category: "Grocery",
-    date: "2026-02-04",
-    note: "10 + 89 + 5",
-  },
-  {
-    id: "seed-5",
-    type: "expense",
-    title: "Daily Food",
-    amount: 172.37,
-    category: "Food",
-    date: "2026-02-10",
-    note: "From previous sheet",
-  },
-  {
-    id: "seed-6",
-    type: "expense",
-    title: "Transport",
-    amount: 50,
-    category: "Transport",
-    date: "2026-02-11",
-    note: "10 + 10 + 10 + 10 + 10",
-  },
-  {
-    id: "seed-7",
-    type: "expense",
-    title: "Subscriptions",
-    amount: 215,
-    category: "Subscriptions",
-    date: "2026-02-12",
-    note: "45 + 50 + 50 + 50 + 20",
-  },
-  {
-    id: "seed-8",
-    type: "expense",
-    title: "Shisha",
-    amount: 29,
-    category: "Lifestyle",
-    date: "2026-02-14",
-    note: "9 + 10 + 5 + 5",
-  },
-  {
-    id: "seed-9",
-    type: "expense",
-    title: "Washing",
-    amount: 3.5,
-    category: "Misc",
-    date: "2026-02-15",
-    note: "Laundry",
-  },
-  {
-    id: "seed-10",
-    type: "expense",
-    title: "Uber",
-    amount: 69,
-    category: "Transport",
-    date: "2026-02-18",
-    note: "17 + 5 + 5 + 7 + 14 + 21",
-  },
-  {
-    id: "seed-11",
-    type: "expense",
-    title: "Perfume",
-    amount: 35,
-    category: "Shopping",
-    date: "2026-02-19",
-    note: "Personal shopping",
-  },
-  {
-    id: "seed-12",
-    type: "expense",
-    title: "Hair",
-    amount: 15,
-    category: "Misc",
-    date: "2026-02-20",
-    note: "Personal care",
-  },
-  {
-    id: "seed-13",
-    type: "expense",
-    title: "Valentines day",
-    amount: 190,
-    category: "Gift",
-    date: "2026-02-21",
-    note: "Special occasion",
-  },
-  {
-    id: "seed-14",
-    type: "expense",
-    title: "Phone item",
-    amount: 15,
-    category: "Shopping",
-    date: "2026-02-22",
-    note: "Accessory",
-  },
 ];
 
 const initialBudgets = {
@@ -282,7 +183,6 @@ export default function App() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Food");
-
   const [entryYear, setEntryYear] = useState(String(new Date().getFullYear()));
   const [entryMonth, setEntryMonth] = useState(
     String(new Date().getMonth() + 1).padStart(2, "0")
@@ -290,7 +190,6 @@ export default function App() {
   const [entryDay, setEntryDay] = useState(
     String(new Date().getDate()).padStart(2, "0")
   );
-
   const [note, setNote] = useState("");
 
   const [customCategories, setCustomCategories] = useState(() => {
@@ -298,6 +197,23 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
   const [newCategoryName, setNewCategoryName] = useState("");
+
+  const [oweName, setOweName] = useState("");
+  const [oweAmount, setOweAmount] = useState("");
+  const [oweType, setOweType] = useState("lent");
+  const [oweYear, setOweYear] = useState(String(new Date().getFullYear()));
+  const [oweMonth, setOweMonth] = useState(
+    String(new Date().getMonth() + 1).padStart(2, "0")
+  );
+  const [oweDay, setOweDay] = useState(
+    String(new Date().getDate()).padStart(2, "0")
+  );
+  const [oweNote, setOweNote] = useState("");
+
+  const [owes, setOwes] = useState(() => {
+    const saved = localStorage.getItem("owes");
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const [supabaseUrl, setSupabaseUrl] = useState(
     localStorage.getItem("supabaseUrl") || ""
@@ -326,6 +242,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("customCategories", JSON.stringify(customCategories));
   }, [customCategories]);
+
+  useEffect(() => {
+    localStorage.setItem("owes", JSON.stringify(owes));
+  }, [owes]);
 
   useEffect(() => {
     localStorage.setItem("supabaseUrl", supabaseUrl);
@@ -358,17 +278,56 @@ export default function App() {
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [transactions, selectedMonth]);
 
-  const incomeTotal = useMemo(() => {
-    return monthTransactions
-      .filter((item) => item.type === "income")
-      .reduce((sum, item) => sum + Number(item.amount), 0);
-  }, [monthTransactions]);
+  const sortedMonths = useMemo(() => {
+    return Array.from(new Set(transactions.map((item) => monthKey(item.date))))
+      .sort();
+  }, [transactions]);
 
-  const expenseTotal = useMemo(() => {
-    return monthTransactions
-      .filter((item) => item.type === "expense")
-      .reduce((sum, item) => sum + Number(item.amount), 0);
-  }, [monthTransactions]);
+  const monthlySnapshots = useMemo(() => {
+    let runningSavings = 0;
+    const snapshotMap = {};
+
+    sortedMonths.forEach((month) => {
+      const monthItems = transactions.filter((item) => monthKey(item.date) === month);
+      const income = monthItems
+        .filter((item) => item.type === "income")
+        .reduce((sum, item) => sum + Number(item.amount), 0);
+
+      const expense = monthItems
+        .filter((item) => item.type === "expense")
+        .reduce((sum, item) => sum + Number(item.amount), 0);
+
+      const openingSavings = runningSavings;
+      const netThisMonth = income - expense;
+      const closingSavings = openingSavings + netThisMonth;
+
+      snapshotMap[month] = {
+        openingSavings,
+        income,
+        expense,
+        netThisMonth,
+        closingSavings,
+      };
+
+      runningSavings = closingSavings;
+    });
+
+    return snapshotMap;
+  }, [transactions, sortedMonths]);
+
+  const currentSnapshot = monthlySnapshots[selectedMonth] || {
+    openingSavings: 0,
+    income: 0,
+    expense: 0,
+    netThisMonth: 0,
+    closingSavings: 0,
+  };
+
+  const incomeTotal = currentSnapshot.income;
+  const expenseTotal = currentSnapshot.expense;
+  const carriedSavings = currentSnapshot.openingSavings;
+  const savingsAmount = currentSnapshot.closingSavings;
+  const netThisMonth = currentSnapshot.netThisMonth;
 
   const moneyGivenTotal = useMemo(() => {
     return monthTransactions
@@ -379,10 +338,6 @@ export default function App() {
       )
       .reduce((sum, item) => sum + Number(item.amount), 0);
   }, [monthTransactions]);
-
-  const savingsAmount = useMemo(() => {
-    return incomeTotal - expenseTotal;
-  }, [incomeTotal, expenseTotal]);
 
   const essentialCategories = new Set([
     "Rent",
@@ -435,8 +390,8 @@ export default function App() {
 
   const savingsRate = useMemo(() => {
     if (incomeTotal <= 0) return 0;
-    return (savingsAmount / incomeTotal) * 100;
-  }, [incomeTotal, savingsAmount]);
+    return (netThisMonth / incomeTotal) * 100;
+  }, [incomeTotal, netThisMonth]);
 
   const budgetStatus = useMemo(() => {
     return allBudgetCategories.map((name) => {
@@ -449,6 +404,42 @@ export default function App() {
     });
   }, [categorySummary, budgets, allBudgetCategories]);
 
+  const owesSummary = useMemo(() => {
+    const map = {};
+
+    owes.forEach((item) => {
+      const person = item.person.trim();
+      if (!person) return;
+
+      if (!map[person]) {
+        map[person] = {
+          person,
+          lent: 0,
+          returned: 0,
+          pending: 0,
+        };
+      }
+
+      if (item.type === "lent") {
+        map[person].lent += Number(item.amount);
+      }
+
+      if (item.type === "returned") {
+        map[person].returned += Number(item.amount);
+      }
+
+      map[person].pending = map[person].lent - map[person].returned;
+    });
+
+    return Object.values(map)
+      .filter((item) => item.lent > 0 || item.returned > 0)
+      .sort((a, b) => b.pending - a.pending);
+  }, [owes]);
+
+  const totalPendingToReceive = useMemo(() => {
+    return owesSummary.reduce((sum, item) => sum + item.pending, 0);
+  }, [owesSummary]);
+
   const aiInsights = useMemo(() => {
     const tips = [];
     const topCategory = categorySummary[0];
@@ -459,21 +450,29 @@ export default function App() {
       );
     }
 
-    if (savingsAmount < 0) {
+    if (netThisMonth < 0) {
       tips.push(
-        "You are spending more than your income this month. Control shopping, lifestyle, and money sent first."
+        "This month is negative. Reduce lifestyle, shopping, and outgoing money first."
       );
     }
 
     if (savingsRate > 0 && savingsRate < 20) {
       tips.push(
-        "Your savings rate is low. Try to keep at least 20% of your income untouched."
+        "Your monthly savings rate is low. Try to keep at least 20% of income untouched."
       );
     }
 
     if (moneyGivenTotal > incomeTotal * 0.15 && incomeTotal > 0) {
       tips.push(
-        "Money sent is high compared to your income. Set a monthly limit and always add a note."
+        "Money given or sent is high compared to your income. Keep a limit."
+      );
+    }
+
+    if (totalPendingToReceive > 0) {
+      tips.push(
+        `People still need to give you back ${formatQAR(
+          totalPendingToReceive
+        )}. Check the Owed section regularly.`
       );
     }
 
@@ -505,9 +504,10 @@ export default function App() {
     return tips;
   }, [
     incomeTotal,
-    savingsAmount,
+    netThisMonth,
     savingsRate,
     moneyGivenTotal,
+    totalPendingToReceive,
     nonEssentialTotal,
     essentialTotal,
     budgetStatus,
@@ -591,6 +591,40 @@ export default function App() {
     setNewCategoryName("");
   }
 
+  function addOweEntry() {
+    const parsedAmount = Number(oweAmount);
+    if (!oweName.trim() || !parsedAmount || parsedAmount <= 0) return;
+
+    const safeDay = String(
+      Math.min(Math.max(Number(oweDay) || 1, 1), 31)
+    ).padStart(2, "0");
+
+    const fullDate = `${oweYear}-${oweMonth}-${safeDay}`;
+
+    const newOwe = {
+      id: uid(),
+      person: oweName.trim(),
+      amount: parsedAmount,
+      type: oweType,
+      date: fullDate,
+      note: oweNote.trim(),
+    };
+
+    setOwes((prev) => [newOwe, ...prev]);
+
+    setOweName("");
+    setOweAmount("");
+    setOweType("lent");
+    setOweYear(String(new Date().getFullYear()));
+    setOweMonth(String(new Date().getMonth() + 1).padStart(2, "0"));
+    setOweDay(String(new Date().getDate()).padStart(2, "0"));
+    setOweNote("");
+  }
+
+  function removeOweEntry(id) {
+    setOwes((prev) => prev.filter((item) => item.id !== id));
+  }
+
   async function connectCloud() {
     if (!supabase) {
       setSyncStatus("error");
@@ -647,6 +681,26 @@ export default function App() {
 
       if (budgetError) throw budgetError;
 
+      await supabase.from("finance_owes").delete().eq("user_id", userId);
+
+      if (owes.length > 0) {
+        const oweRows = owes.map((item) => ({
+          id: item.id,
+          user_id: userId,
+          person: item.person,
+          amount: item.amount,
+          type: item.type,
+          date: item.date,
+          note: item.note,
+        }));
+
+        const { error: oweError } = await supabase
+          .from("finance_owes")
+          .insert(oweRows);
+
+        if (oweError) throw oweError;
+      }
+
       const { error: settingsError } = await supabase
         .from("finance_settings")
         .upsert(
@@ -690,6 +744,14 @@ export default function App() {
 
       if (budgetError) throw budgetError;
 
+      const { data: owesData, error: owesError } = await supabase
+        .from("finance_owes")
+        .select("id,person,amount,type,date,note")
+        .eq("user_id", userId)
+        .order("date", { ascending: false });
+
+      if (owesError) throw owesError;
+
       const { data: settingsData, error: settingsError } = await supabase
         .from("finance_settings")
         .select("selected_month")
@@ -708,6 +770,8 @@ export default function App() {
         setBudgets(nextBudgets);
       }
 
+      if (owesData) setOwes(owesData);
+
       if (settingsData?.selected_month) {
         setSelectedMonth(settingsData.selected_month);
       }
@@ -722,39 +786,65 @@ export default function App() {
 
   function renderHome() {
     return (
-      <div className="card">
-        <div className="section-title">Recent Transactions</div>
-        <div className="transaction-list">
-          {monthTransactions.length === 0 ? (
-            <div className="empty-text">No entries for this month.</div>
+      <div className="stack">
+        <div className="card">
+          <div className="section-title">Recent Transactions</div>
+          <div className="transaction-list">
+            {monthTransactions.length === 0 ? (
+              <div className="empty-text">No entries for this month.</div>
+            ) : (
+              monthTransactions.map((item) => (
+                <div className="transaction-item" key={item.id}>
+                  <div className="transaction-left">
+                    <div className="transaction-title">{item.title}</div>
+                    <div className="transaction-meta">
+                      <span className="pill">{item.category}</span>
+                      <span>{item.date}</span>
+                      {item.note ? <span>• {item.note}</span> : null}
+                    </div>
+                  </div>
+                  <div className="transaction-right">
+                    <div
+                      className={
+                        item.type === "income"
+                          ? "amount income"
+                          : "amount expense"
+                      }
+                    >
+                      {item.type === "income" ? "+" : "-"}
+                      {Number(item.amount).toFixed(2)}
+                    </div>
+                    <button
+                      className="icon-btn"
+                      onClick={() => removeTransaction(item.id)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="section-title">People Need to Pay You</div>
+          {owesSummary.length === 0 ? (
+            <div className="empty-text">No pending money to receive.</div>
           ) : (
-            monthTransactions.map((item) => (
-              <div className="transaction-item" key={item.id}>
+            owesSummary.map((item) => (
+              <div className="transaction-item" key={item.person}>
                 <div className="transaction-left">
-                  <div className="transaction-title">{item.title}</div>
+                  <div className="transaction-title">{item.person}</div>
                   <div className="transaction-meta">
-                    <span className="pill">{item.category}</span>
-                    <span>{item.date}</span>
-                    {item.note ? <span>• {item.note}</span> : null}
+                    <span>Lent: {formatQAR(item.lent)}</span>
+                    <span>Returned: {formatQAR(item.returned)}</span>
                   </div>
                 </div>
                 <div className="transaction-right">
-                  <div
-                    className={
-                      item.type === "income"
-                        ? "amount income"
-                        : "amount expense"
-                    }
-                  >
-                    {item.type === "income" ? "+" : "-"}
-                    {Number(item.amount).toFixed(2)}
+                  <div className={item.pending > 0 ? "amount expense" : "amount income"}>
+                    {formatQAR(item.pending)}
                   </div>
-                  <button
-                    className="icon-btn"
-                    onClick={() => removeTransaction(item.id)}
-                  >
-                    ✕
-                  </button>
                 </div>
               </div>
             ))
@@ -766,105 +856,207 @@ export default function App() {
 
   function renderAdd() {
     return (
-      <div className="card">
-        <div className="section-title center">Add Entry</div>
+      <div className="stack">
+        <div className="card">
+          <div className="section-title center">Add Entry</div>
 
-        <div className="toggle-row">
-          <button
-            className={entryType === "expense" ? "btn btn-dark" : "btn btn-light"}
-            onClick={() => setEntryType("expense")}
-          >
-            Expense
-          </button>
-          <button
-            className={entryType === "income" ? "btn btn-dark" : "btn btn-light"}
-            onClick={() => setEntryType("income")}
-          >
-            Income
-          </button>
-        </div>
-
-        <input
-          className="input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={entryType === "income" ? "Income title" : "Expense title"}
-        />
-
-        <input
-          className="input"
-          value={amount}
-          onChange={(e) => setAmount(sanitizeDecimal(e.target.value))}
-          placeholder="Amount"
-          inputMode="decimal"
-        />
-
-        {entryType === "expense" ? (
-          <CustomSelect
-            value={category}
-            onChange={setCategory}
-            options={allExpenseCategories.map((option) => ({
-              value: option,
-              label: option,
-            }))}
-          />
-        ) : null}
-
-        <div className="grid-3">
-          <CustomSelect
-            value={entryYear}
-            onChange={setEntryYear}
-            options={Array.from({ length: 6 }, (_, index) => {
-              const year = String(new Date().getFullYear() - 2 + index);
-              return { value: year, label: year };
-            })}
-          />
-
-          <CustomSelect
-            value={entryMonth}
-            onChange={setEntryMonth}
-            options={Array.from({ length: 12 }, (_, index) => {
-              const monthNumber = String(index + 1).padStart(2, "0");
-              const label = new Date(`2026-${monthNumber}-01`).toLocaleString(
-                undefined,
-                { month: "long" }
-              );
-              return { value: monthNumber, label };
-            })}
-          />
-
-          <CustomSelect
-            value={entryDay}
-            onChange={setEntryDay}
-            options={Array.from({ length: 31 }, (_, index) => {
-              const value = String(index + 1).padStart(2, "0");
-              return { value, label: value };
-            })}
-          />
-        </div>
-
-        <input
-          className="input"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Note or person name"
-        />
-
-        <div className="quick-row">
-          {[5, 10, 20, 50].map((q) => (
+          <div className="toggle-row">
             <button
-              key={q}
-              className="btn btn-light"
-              onClick={() => setAmount(String((Number(amount) || 0) + q))}
+              className={entryType === "expense" ? "btn btn-dark" : "btn btn-light"}
+              onClick={() => setEntryType("expense")}
             >
-              +{q}
+              Expense
             </button>
-          ))}
+            <button
+              className={entryType === "income" ? "btn btn-dark" : "btn btn-light"}
+              onClick={() => setEntryType("income")}
+            >
+              Income
+            </button>
+          </div>
+
+          <input
+            className="input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={entryType === "income" ? "Income title" : "Expense title"}
+          />
+
+          <input
+            className="input"
+            value={amount}
+            onChange={(e) => setAmount(sanitizeDecimal(e.target.value))}
+            placeholder="Amount"
+            inputMode="decimal"
+          />
+
+          {entryType === "expense" ? (
+            <CustomSelect
+              value={category}
+              onChange={setCategory}
+              options={allExpenseCategories.map((option) => ({
+                value: option,
+                label: option,
+              }))}
+            />
+          ) : null}
+
+          <div className="grid-3">
+            <CustomSelect
+              value={entryYear}
+              onChange={setEntryYear}
+              options={Array.from({ length: 6 }, (_, index) => {
+                const year = String(new Date().getFullYear() - 2 + index);
+                return { value: year, label: year };
+              })}
+            />
+
+            <CustomSelect
+              value={entryMonth}
+              onChange={setEntryMonth}
+              options={Array.from({ length: 12 }, (_, index) => {
+                const monthNumber = String(index + 1).padStart(2, "0");
+                const label = new Date(`2026-${monthNumber}-01`).toLocaleString(
+                  undefined,
+                  { month: "long" }
+                );
+                return { value: monthNumber, label };
+              })}
+            />
+
+            <CustomSelect
+              value={entryDay}
+              onChange={setEntryDay}
+              options={Array.from({ length: 31 }, (_, index) => {
+                const value = String(index + 1).padStart(2, "0");
+                return { value, label: value };
+              })}
+            />
+          </div>
+
+          <input
+            className="input"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Note or person name"
+          />
+
+          <div className="quick-row">
+            {[5, 10, 20, 50].map((q) => (
+              <button
+                key={q}
+                className="btn btn-light"
+                onClick={() => setAmount(String((Number(amount) || 0) + q))}
+              >
+                +{q}
+              </button>
+            ))}
+          </div>
+
+          <button className="btn btn-dark full" onClick={addTransaction}>
+            Add Entry
+          </button>
         </div>
 
-        <button className="btn btn-dark full" onClick={addTransaction}>
-          Add Entry
-        </button>
+        <div className="card">
+          <div className="section-title center">Track Money Owed to You</div>
+
+          <input
+            className="input"
+            value={oweName}
+            onChange={(e) => setOweName(e.target.value)}
+            placeholder="Person name"
+          />
+
+          <input
+            className="input"
+            value={oweAmount}
+            onChange={(e) => setOweAmount(sanitizeDecimal(e.target.value))}
+            placeholder="Amount"
+            inputMode="decimal"
+          />
+
+          <CustomSelect
+            value={oweType}
+            onChange={setOweType}
+            options={[
+              { value: "lent", label: "I gave money" },
+              { value: "returned", label: "They paid me back" },
+            ]}
+          />
+
+          <div className="grid-3">
+            <CustomSelect
+              value={oweYear}
+              onChange={setOweYear}
+              options={Array.from({ length: 6 }, (_, index) => {
+                const year = String(new Date().getFullYear() - 2 + index);
+                return { value: year, label: year };
+              })}
+            />
+
+            <CustomSelect
+              value={oweMonth}
+              onChange={setOweMonth}
+              options={Array.from({ length: 12 }, (_, index) => {
+                const monthNumber = String(index + 1).padStart(2, "0");
+                const label = new Date(`2026-${monthNumber}-01`).toLocaleString(
+                  undefined,
+                  { month: "long" }
+                );
+                return { value: monthNumber, label };
+              })}
+            />
+
+            <CustomSelect
+              value={oweDay}
+              onChange={setOweDay}
+              options={Array.from({ length: 31 }, (_, index) => {
+                const value = String(index + 1).padStart(2, "0");
+                return { value, label: value };
+              })}
+            />
+          </div>
+
+          <input
+            className="input"
+            value={oweNote}
+            onChange={(e) => setOweNote(e.target.value)}
+            placeholder="Note"
+          />
+
+          <button className="btn btn-dark full" onClick={addOweEntry}>
+            Save Owed Entry
+          </button>
+
+          <div className="transaction-list" style={{ marginTop: "12px" }}>
+            {owes.map((item) => (
+              <div className="transaction-item" key={item.id}>
+                <div className="transaction-left">
+                  <div className="transaction-title">{item.person}</div>
+                  <div className="transaction-meta">
+                    <span className="pill">
+                      {item.type === "lent" ? "Given" : "Returned"}
+                    </span>
+                    <span>{item.date}</span>
+                    {item.note ? <span>• {item.note}</span> : null}
+                  </div>
+                </div>
+                <div className="transaction-right">
+                  <div className={item.type === "lent" ? "amount expense" : "amount income"}>
+                    {formatQAR(item.amount)}
+                  </div>
+                  <button
+                    className="icon-btn"
+                    onClick={() => removeOweEntry(item.id)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -979,16 +1171,10 @@ export default function App() {
 
         <div className="card">
           <div className="section-title">Control First</div>
-          <div className="tip">1. Keep needs separate from wants.</div>
-          <div className="tip">
-            2. Track money given and send home money every single time.
-          </div>
-          <div className="tip">
-            3. Add person name or purpose in note.
-          </div>
-          <div className="tip">
-            4. Check Plan tab before spending on shopping or lifestyle.
-          </div>
+          <div className="tip">1. Savings now carry forward automatically to the next month.</div>
+          <div className="tip">2. Track money you gave separately from money people returned.</div>
+          <div className="tip">3. Pending money to receive is shown clearly on the home screen.</div>
+          <div className="tip">4. Check Plan tab before spending on shopping or lifestyle.</div>
         </div>
       </div>
     );
@@ -1052,6 +1238,9 @@ export default function App() {
             finance_budgets(user_id text, category text, budget numeric)
           </div>
           <div className="code-box">
+            finance_owes(id text primary key, user_id text, person text, amount numeric, type text, date date, note text)
+          </div>
+          <div className="code-box">
             finance_settings(user_id text primary key, selected_month text)
           </div>
         </div>
@@ -1088,28 +1277,30 @@ export default function App() {
         <div className="hero-card">
           <div className="hero-top">
             <div>
-              <div className="hero-sub">This Month</div>
+              <div className="hero-sub">Total Savings</div>
               <div className="hero-value">{formatQAR(savingsAmount)}</div>
-              <div className="hero-note">Net balance after all tracked expenses</div>
+              <div className="hero-note">
+                Previous savings + this month result
+              </div>
             </div>
             <div className="rate-box">
-              <div className="hero-sub small-white">SAVINGS RATE</div>
-              <div className="rate-value">{Math.round(savingsRate)}%</div>
+              <div className="hero-sub small-white">THIS MONTH</div>
+              <div className="rate-value">{formatQAR(netThisMonth)}</div>
             </div>
           </div>
 
           <div className="stat-grid">
             <div className="stat-box">
+              <div className="stat-label">Carry In</div>
+              <div className="stat-value">{Math.round(carriedSavings)}</div>
+            </div>
+            <div className="stat-box">
               <div className="stat-label">Income</div>
               <div className="stat-value">{Math.round(incomeTotal)}</div>
             </div>
             <div className="stat-box">
-              <div className="stat-label">Expense</div>
-              <div className="stat-value">{Math.round(expenseTotal)}</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-label">Sent</div>
-              <div className="stat-value">{Math.round(moneyGivenTotal)}</div>
+              <div className="stat-label">Pending</div>
+              <div className="stat-value">{Math.round(totalPendingToReceive)}</div>
             </div>
           </div>
         </div>
