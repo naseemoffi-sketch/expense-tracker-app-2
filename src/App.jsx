@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-const expenseCategories = [
+const baseExpenseCategories = [
   "Rent",
   "Bills",
   "Food",
@@ -12,12 +12,13 @@ const expenseCategories = [
   "Health",
   "Gift",
   "Money Given",
+  "Send Home Money",
   "Lifestyle",
   "Shopping",
   "Misc",
 ];
 
-const budgetCategories = [
+const baseBudgetCategories = [
   "Rent",
   "Bills",
   "Food",
@@ -26,6 +27,7 @@ const budgetCategories = [
   "Subscriptions",
   "Room",
   "Money Given",
+  "Send Home Money",
   "Lifestyle",
   "Shopping",
   "Misc",
@@ -169,6 +171,7 @@ const initialBudgets = {
   Subscriptions: 220,
   Room: 100,
   "Money Given": 1000,
+  "Send Home Money": 1000,
   Lifestyle: 150,
   Shopping: 100,
   Misc: 100,
@@ -192,6 +195,73 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function CustomSelect({
+  value,
+  onChange,
+  options,
+  placeholder = "Select",
+  className = "",
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  const selected = options.find((item) => item.value === value);
+
+  return (
+    <div className={`custom-select ${className}`} ref={ref}>
+      <button
+        type="button"
+        className={`custom-select-trigger ${open ? "open" : ""}`}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span>{selected ? selected.label : placeholder}</span>
+        <span className={`custom-select-arrow ${open ? "open" : ""}`}>⌄</span>
+      </button>
+
+      <div className={`custom-select-menu ${open ? "show" : ""}`}>
+        {options.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            className={`custom-select-option ${
+              value === item.value ? "selected" : ""
+            }`}
+            onClick={() => {
+              onChange(item.value);
+              setOpen(false);
+            }}
+          >
+            <span>{item.label}</span>
+            {value === item.value ? (
+              <span className="custom-select-check">✓</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem("transactions");
@@ -212,11 +282,22 @@ export default function App() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Food");
-  const [entryMonth, setEntryMonth] = useState(todayDate().slice(0, 7));
+
+  const [entryYear, setEntryYear] = useState(String(new Date().getFullYear()));
+  const [entryMonth, setEntryMonth] = useState(
+    String(new Date().getMonth() + 1).padStart(2, "0")
+  );
   const [entryDay, setEntryDay] = useState(
     String(new Date().getDate()).padStart(2, "0")
   );
+
   const [note, setNote] = useState("");
+
+  const [customCategories, setCustomCategories] = useState(() => {
+    const saved = localStorage.getItem("customCategories");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   const [supabaseUrl, setSupabaseUrl] = useState(
     localStorage.getItem("supabaseUrl") || ""
@@ -243,10 +324,24 @@ export default function App() {
   }, [selectedMonth]);
 
   useEffect(() => {
+    localStorage.setItem("customCategories", JSON.stringify(customCategories));
+  }, [customCategories]);
+
+  useEffect(() => {
     localStorage.setItem("supabaseUrl", supabaseUrl);
     localStorage.setItem("supabaseAnonKey", supabaseAnonKey);
     localStorage.setItem("financeUserId", userId);
   }, [supabaseUrl, supabaseAnonKey, userId]);
+
+  const allExpenseCategories = useMemo(
+    () => [...baseExpenseCategories, ...customCategories],
+    [customCategories]
+  );
+
+  const allBudgetCategories = useMemo(
+    () => [...baseBudgetCategories, ...customCategories],
+    [customCategories]
+  );
 
   const supabase = useMemo(() => {
     if (!supabaseUrl || !supabaseAnonKey) return null;
@@ -278,7 +373,9 @@ export default function App() {
   const moneyGivenTotal = useMemo(() => {
     return monthTransactions
       .filter(
-        (item) => item.type === "expense" && item.category === "Money Given"
+        (item) =>
+          item.type === "expense" &&
+          (item.category === "Money Given" || item.category === "Send Home Money")
       )
       .reduce((sum, item) => sum + Number(item.amount), 0);
   }, [monthTransactions]);
@@ -296,6 +393,8 @@ export default function App() {
     "Subscriptions",
     "Room",
     "Health",
+    "Money Given",
+    "Send Home Money",
   ]);
 
   const nonEssentialCategories = new Set([
@@ -340,7 +439,7 @@ export default function App() {
   }, [incomeTotal, savingsAmount]);
 
   const budgetStatus = useMemo(() => {
-    return budgetCategories.map((name) => {
+    return allBudgetCategories.map((name) => {
       const spent =
         categorySummary.find((item) => item.name === name)?.value || 0;
       const budget = Number(budgets[name] || 0);
@@ -348,7 +447,7 @@ export default function App() {
       const percent = budget > 0 ? (spent / budget) * 100 : 0;
       return { name, spent, budget, remaining, percent };
     });
-  }, [categorySummary, budgets]);
+  }, [categorySummary, budgets, allBudgetCategories]);
 
   const aiInsights = useMemo(() => {
     const tips = [];
@@ -362,7 +461,7 @@ export default function App() {
 
     if (savingsAmount < 0) {
       tips.push(
-        "You are spending more than your income this month. Control shopping, lifestyle, and money given first."
+        "You are spending more than your income this month. Control shopping, lifestyle, and money sent first."
       );
     }
 
@@ -374,7 +473,7 @@ export default function App() {
 
     if (moneyGivenTotal > incomeTotal * 0.15 && incomeTotal > 0) {
       tips.push(
-        "Money given to people is high compared to your income. Set a monthly limit and always add the person's name in note."
+        "Money sent is high compared to your income. Set a monthly limit and always add a note."
       );
     }
 
@@ -435,7 +534,7 @@ export default function App() {
       Math.min(Math.max(Number(entryDay) || 1, 1), 31)
     ).padStart(2, "0");
 
-    const fullDate = `${entryMonth}-${safeDay}`;
+    const fullDate = `${entryYear}-${entryMonth}-${safeDay}`;
     const finalCategory = entryType === "income" ? "Income" : category;
 
     const newRow = {
@@ -452,10 +551,11 @@ export default function App() {
     setTitle("");
     setAmount("");
     setCategory("Food");
-    setEntryMonth(todayDate().slice(0, 7));
+    setEntryYear(String(new Date().getFullYear()));
+    setEntryMonth(String(new Date().getMonth() + 1).padStart(2, "0"));
     setEntryDay(String(new Date().getDate()).padStart(2, "0"));
     setNote("");
-    setSelectedMonth(entryMonth);
+    setSelectedMonth(`${entryYear}-${entryMonth}`);
     setActiveTab("home");
   }
 
@@ -468,6 +568,27 @@ export default function App() {
       ...prev,
       [name]: Number(value) || 0,
     }));
+  }
+
+  function addNewCategory() {
+    const cleanName = newCategoryName.trim();
+    if (!cleanName) return;
+
+    const exists =
+      baseExpenseCategories.includes(cleanName) ||
+      customCategories.includes(cleanName);
+
+    if (exists) {
+      setNewCategoryName("");
+      return;
+    }
+
+    setCustomCategories((prev) => [...prev, cleanName]);
+    setBudgets((prev) => ({
+      ...prev,
+      [cleanName]: 0,
+    }));
+    setNewCategoryName("");
   }
 
   async function connectCloud() {
@@ -679,54 +800,47 @@ export default function App() {
         />
 
         {entryType === "expense" ? (
-         <select
-  className="input"
-  value={category}
-  onChange={(e) => setCategory(e.target.value)}
->
-            {expenseCategories.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            value={category}
+            onChange={setCategory}
+            options={allExpenseCategories.map((option) => ({
+              value: option,
+              label: option,
+            }))}
+          />
         ) : null}
 
-        <div className="grid-2">
-          <select
-            className="input"
-            value={entryMonth}
-            onChange={(e) => setEntryMonth(e.target.value)}
-          >
-            {Array.from({ length: 12 }, (_, index) => {
-              const monthNumber = String(index + 1).padStart(2, "0");
-              const value = `${selectedMonth.slice(0, 4)}-${monthNumber}`;
-              const label = new Date(`${value}-01`).toLocaleString(undefined, {
-                month: "long",
-                year: "numeric",
-              });
-              return (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              );
+        <div className="grid-3">
+          <CustomSelect
+            value={entryYear}
+            onChange={setEntryYear}
+            options={Array.from({ length: 6 }, (_, index) => {
+              const year = String(new Date().getFullYear() - 2 + index);
+              return { value: year, label: year };
             })}
-          </select>
+          />
 
-          <select
-            className="input"
-            value={entryDay}
-            onChange={(e) => setEntryDay(e.target.value)}
-          >
-            {Array.from({ length: 31 }, (_, index) => {
-              const value = String(index + 1).padStart(2, "0");
-              return (
-                <option key={value} value={value}>
-                  {value}
-                </option>
+          <CustomSelect
+            value={entryMonth}
+            onChange={setEntryMonth}
+            options={Array.from({ length: 12 }, (_, index) => {
+              const monthNumber = String(index + 1).padStart(2, "0");
+              const label = new Date(`2026-${monthNumber}-01`).toLocaleString(
+                undefined,
+                { month: "long" }
               );
+              return { value: monthNumber, label };
             })}
-          </select>
+          />
+
+          <CustomSelect
+            value={entryDay}
+            onChange={setEntryDay}
+            options={Array.from({ length: 31 }, (_, index) => {
+              const value = String(index + 1).padStart(2, "0");
+              return { value, label: value };
+            })}
+          />
         </div>
 
         <input
@@ -758,6 +872,23 @@ export default function App() {
   function renderPlan() {
     return (
       <div className="stack">
+        <div className="card">
+          <div className="section-title">Add New Budget Section</div>
+
+          <div className="grid-2">
+            <input
+              className="input"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="New section name"
+            />
+
+            <button className="btn btn-dark" onClick={addNewCategory}>
+              Add Section
+            </button>
+          </div>
+        </div>
+
         {budgetStatus.map((item) => (
           <div className="card" key={item.name}>
             <div className="budget-head">
@@ -810,7 +941,8 @@ export default function App() {
           ) : (
             <div className="simple-chart">
               {categorySummary.map((item) => {
-                const percent = expenseTotal > 0 ? (item.value / expenseTotal) * 100 : 0;
+                const percent =
+                  expenseTotal > 0 ? (item.value / expenseTotal) * 100 : 0;
                 return (
                   <div key={item.name} className="chart-row">
                     <div className="chart-label">{item.name}</div>
@@ -849,10 +981,10 @@ export default function App() {
           <div className="section-title">Control First</div>
           <div className="tip">1. Keep needs separate from wants.</div>
           <div className="tip">
-            2. Track money given to people every single time.
+            2. Track money given and send home money every single time.
           </div>
           <div className="tip">
-            3. Add person name in note when you give money.
+            3. Add person name or purpose in note.
           </div>
           <div className="tip">
             4. Check Plan tab before spending on shopping or lifestyle.
@@ -939,17 +1071,14 @@ export default function App() {
         </div>
 
         <div className="top-row">
-          <select
-  className="input"
-  value={selectedMonth}
-  onChange={(e) => setSelectedMonth(e.target.value)}
->
-            {months.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            value={selectedMonth}
+            onChange={setSelectedMonth}
+            options={months.map((item) => ({
+              value: item,
+              label: item,
+            }))}
+          />
 
           <div className={`sync-pill ${syncStatus}`}>
             {syncStatus.toUpperCase()}
@@ -979,7 +1108,7 @@ export default function App() {
               <div className="stat-value">{Math.round(expenseTotal)}</div>
             </div>
             <div className="stat-box">
-              <div className="stat-label">Given</div>
+              <div className="stat-label">Sent</div>
               <div className="stat-value">{Math.round(moneyGivenTotal)}</div>
             </div>
           </div>
@@ -1037,14 +1166,14 @@ export default function App() {
           </button>
         </div>
 
-<div key={activeTab} className="page-animate">
-  {activeTab === "home" && renderHome()}
-  {activeTab === "add" && renderAdd()}
-  {activeTab === "plan" && renderPlan()}
-  {activeTab === "charts" && renderCharts()}
-  {activeTab === "ai" && renderAI()}
-  {activeTab === "cloud" && renderCloud()}
-</div>
+        <div key={activeTab} className="page-animate">
+          {activeTab === "home" && renderHome()}
+          {activeTab === "add" && renderAdd()}
+          {activeTab === "plan" && renderPlan()}
+          {activeTab === "charts" && renderCharts()}
+          {activeTab === "ai" && renderAI()}
+          {activeTab === "cloud" && renderCloud()}
+        </div>
       </div>
     </div>
   );
