@@ -866,70 +866,92 @@ export default function App() {
   }
 
   async function pullFromCloud() {
-    if (!supabase) {
-      setSyncStatus("error");
-      setSyncMessage("Supabase not connected");
-      return;
-    }
-
-    setSyncStatus("syncing");
-    setSyncMessage("Downloading data...");
-
-    try {
-      const { data: txData, error: txError } = await supabase
-        .from("finance_transactions")
-        .select("id,type,title,amount,category,date,note")
-        .eq("user_id", userId)
-        .order("date", { ascending: false });
-
-      if (txError) throw txError;
-
-      const { data: budgetData, error: budgetError } = await supabase
-        .from("finance_budgets")
-        .select("category,budget")
-        .eq("user_id", userId);
-
-      if (budgetError) throw budgetError;
-
-      const { data: owesData, error: owesError } = await supabase
-        .from("finance_owes")
-        .select("id,person,amount,type,date,note")
-        .eq("user_id", userId)
-        .order("date", { ascending: false });
-
-      if (owesError) throw owesError;
-
-      const { data: settingsData, error: settingsError } = await supabase
-        .from("finance_settings")
-        .select("selected_month")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (settingsError) throw settingsError;
-
-      if (txData) setTransactions(txData);
-
-      if (budgetData) {
-        const nextBudgets = { ...initialBudgets };
-        budgetData.forEach((row) => {
-          nextBudgets[row.category] = Number(row.budget);
-        });
-        setBudgets(nextBudgets);
-      }
-
-      if (owesData) setOwes(owesData);
-
-      if (settingsData?.selected_month) {
-        setSelectedMonth(settingsData.selected_month);
-      }
-
-      setSyncStatus("connected");
-      setSyncMessage("Cloud data loaded");
-    } catch (error) {
-      setSyncStatus("error");
-      setSyncMessage(error?.message || "Cloud download failed");
-    }
+  if (!supabase) {
+    setSyncStatus("error");
+    setSyncMessage("Supabase not connected");
+    return;
   }
+
+  setSyncStatus("syncing");
+  setSyncMessage("Downloading data...");
+
+  try {
+    const { data: txData, error: txError } = await supabase
+      .from("finance_transactions")
+      .select("id,type,title,amount,category,date,note")
+      .eq("user_id", userId)
+      .order("date", { ascending: false });
+
+    if (txError) throw txError;
+
+    const { data: budgetData, error: budgetError } = await supabase
+      .from("finance_budgets")
+      .select("category,budget")
+      .eq("user_id", userId);
+
+    if (budgetError) throw budgetError;
+
+    const { data: owesData, error: owesError } = await supabase
+      .from("finance_owes")
+      .select("id,person,amount,type,date,note")
+      .eq("user_id", userId)
+      .order("date", { ascending: false });
+
+    if (owesError) throw owesError;
+
+    const { data: settingsData, error: settingsError } = await supabase
+      .from("finance_settings")
+      .select("selected_month")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (settingsError) throw settingsError;
+
+    const safeTransactions = Array.isArray(txData) ? txData : [];
+    const safeBudgets = Array.isArray(budgetData) ? budgetData : [];
+    const safeOwes = Array.isArray(owesData) ? owesData : [];
+
+    setTransactions(safeTransactions);
+    setOwes(safeOwes);
+
+    const nextBudgets = { ...initialBudgets };
+    safeBudgets.forEach((row) => {
+      nextBudgets[row.category] = Number(row.budget || 0);
+    });
+    setBudgets(nextBudgets);
+
+    const dynamicCategories = Array.from(
+      new Set([
+        ...safeTransactions
+          .filter((item) => item.type === "expense")
+          .map((item) => item.category),
+        ...safeBudgets.map((item) => item.category),
+      ])
+    ).filter(
+      (name) =>
+        !baseExpenseCategories.includes(name) &&
+        name !== "Income"
+    );
+
+    setCustomCategories(dynamicCategories);
+
+    if (settingsData?.selected_month) {
+      setSelectedMonth(settingsData.selected_month);
+    } else if (safeTransactions.length > 0) {
+      setSelectedMonth(monthKey(safeTransactions[0].date));
+    }
+
+    setSyncStatus("connected");
+    setSyncMessage(
+      `Cloud loaded: ${safeTransactions.length} transactions, ${safeOwes.length} money records`
+    );
+  } catch (error) {
+    console.error("Pull error:", error);
+    setSyncStatus("error");
+    setSyncMessage(error?.message || "Cloud download failed");
+  }
+}
+
 
   function renderHome() {
     return (
